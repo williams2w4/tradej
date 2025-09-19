@@ -1,9 +1,9 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { Settings } from "../types";
+import { CurrencyCode, Settings } from "../types";
 
 interface SettingsState {
   timezone: string;
-  currency: string;
+  currency: CurrencyCode;
 }
 
 const initialState: SettingsState = {
@@ -18,7 +18,7 @@ const settingsSlice = createSlice({
     setTimezone(state, action: PayloadAction<string>) {
       state.timezone = action.payload;
     },
-    setCurrency(state, action: PayloadAction<string>) {
+    setCurrency(state, action: PayloadAction<CurrencyCode>) {
       state.currency = action.payload;
     },
     hydrateSettings(state, action: PayloadAction<Settings>) {

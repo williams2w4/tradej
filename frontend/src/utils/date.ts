@@ -1,11 +1,13 @@
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezonePlugin from "dayjs/plugin/timezone";
+import quarterOfYear from "dayjs/plugin/quarterOfYear";
 
 import { DateRangePreset } from "../types";
 
 dayjs.extend(utc);
 dayjs.extend(timezonePlugin);
+dayjs.extend(quarterOfYear);
 
 export const computeRange = (preset: DateRangePreset, timezone: string): {
   start: string | null;
@@ -63,18 +65,24 @@ export const computeRange = (preset: DateRangePreset, timezone: string): {
   }
 };
 
-export const formatCurrency = (value: number, currency = "USD"): string => {
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency,
-    minimumFractionDigits: 2
-  }).format(value);
+export const formatCurrency = (value: number, currency = "USD", withSymbol = true): string => {
+  const options: Intl.NumberFormatOptions = {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  };
+
+  if (withSymbol) {
+    options.style = "currency";
+    options.currency = currency;
+  }
+
+  return new Intl.NumberFormat(undefined, options).format(value);
 };
 
 export const formatPercentage = (value: number): string => {
   return `${(value * 100).toFixed(2)}%`;
 };
 
-export const formatDateTime = (value: string, timezone: string): string => {
-  return dayjs(value).tz(timezone).format("YYYY-MM-DD HH:mm");
+export const formatDateTime = (value: string, timezone: string, withSeconds = false): string => {
+  return dayjs(value).tz(timezone).format(withSeconds ? "YYYY-MM-DD HH:mm:ss" : "YYYY-MM-DD HH:mm");
 };

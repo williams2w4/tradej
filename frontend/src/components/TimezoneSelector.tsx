@@ -68,7 +68,10 @@ const TimezoneSelector = () => {
       value={timezone}
       loading={loading}
       onChange={handleChange}
-      filterOption={(input, option) => (option?.value ?? "").toLowerCase().includes(input.toLowerCase())}
+      filterOption={(input, option) => {
+        const optionValue = String(option?.value ?? "");
+        return optionValue.toLowerCase().includes(input.toLowerCase());
+      }}
     >
       {options.map((tz) => (
         <Select.Option key={tz} value={tz}>

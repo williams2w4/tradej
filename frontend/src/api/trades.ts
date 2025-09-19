@@ -20,6 +20,10 @@ export const deleteAllTrades = async (): Promise<void> => {
   await client.delete("/trades");
 };
 
+export const deleteTrade = async (tradeId: number): Promise<void> => {
+  await client.delete(`/trades/${tradeId}`);
+};
+
 export const exportFills = async (params: TradeQuery): Promise<string> => {
   const response = await client.get("/trades/fills/export", {
     params,

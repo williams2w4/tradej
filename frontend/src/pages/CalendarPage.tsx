@@ -64,6 +64,25 @@ const CalendarPage = () => {
     }
     const key = current.format("YYYY-MM-DD");
     const entry = data[key];
+    if (!entry) {
+      return (
+        <div
+          style={{
+            minHeight: 110,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            borderRadius: 8,
+            padding: 8
+          }}
+        >
+          <Typography.Text strong style={{ fontSize: 21 }}>
+            {current.date()}
+          </Typography.Text>
+        </div>
+      );
+    }
     const isPositive = (entry?.total_profit_loss ?? 0) >= 0;
 
     const tradeCountText = `${entry?.trade_count ?? 0}笔`;
@@ -107,6 +126,25 @@ const CalendarPage = () => {
     }
     const key = current.format("YYYY-MM");
     const entry = data[key];
+    if (!entry) {
+      return (
+        <div
+          style={{
+            minHeight: 120,
+            borderRadius: 10,
+            padding: 12,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center"
+          }}
+        >
+          <Typography.Text strong style={{ fontSize: 21 }}>
+            {current.format("MM月")}
+          </Typography.Text>
+        </div>
+      );
+    }
     const isPositive = (entry?.total_profit_loss ?? 0) >= 0;
 
     const tradeCountText = `${entry?.trade_count ?? 0}笔`;

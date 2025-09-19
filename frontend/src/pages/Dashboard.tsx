@@ -55,7 +55,7 @@ const Dashboard = () => {
     {
       key: "total",
       title: "总盈亏",
-      value: formatCurrency(totalProfit, currency)
+      value: formatCurrency(totalProfit, currency, false)
     },
     {
       key: "win_rate",
@@ -73,7 +73,7 @@ const Dashboard = () => {
     {
       key: "average",
       title: "平均盈亏",
-      value: formatCurrency(overview?.average_profit_loss ?? 0, currency)
+      value: formatCurrency(overview?.average_profit_loss ?? 0, currency, false)
     },
     {
       key: "count",
@@ -130,7 +130,7 @@ const Dashboard = () => {
               dataIndex: "total_profit_loss",
               render: (value: number) => (
                 <span style={{ color: value >= 0 ? "#3f8600" : "#cf1322" }}>
-                  {formatCurrency(value, currency)}
+                  {formatCurrency(value, currency, false)}
                 </span>
               )
             }
