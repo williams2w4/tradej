@@ -2,6 +2,7 @@ import { Layout, Menu, Typography } from "antd";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import TimezoneSelector from "./TimezoneSelector";
+import CurrencySelector from "./CurrencySelector";
 
 const { Header, Content, Footer } = Layout;
 
@@ -38,6 +39,7 @@ const AppLayout = () => {
           onClick={handleMenuClick}
           style={{ flex: 1 }}
         />
+        <CurrencySelector />
         <TimezoneSelector />
       </Header>
       <Content style={{ padding: "24px" }}>

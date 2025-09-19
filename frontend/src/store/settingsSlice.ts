@@ -3,10 +3,12 @@ import { Settings } from "../types";
 
 interface SettingsState {
   timezone: string;
+  currency: string;
 }
 
 const initialState: SettingsState = {
-  timezone: "UTC"
+  timezone: "UTC",
+  currency: "USD"
 };
 
 const settingsSlice = createSlice({
@@ -16,11 +18,15 @@ const settingsSlice = createSlice({
     setTimezone(state, action: PayloadAction<string>) {
       state.timezone = action.payload;
     },
+    setCurrency(state, action: PayloadAction<string>) {
+      state.currency = action.payload;
+    },
     hydrateSettings(state, action: PayloadAction<Settings>) {
       state.timezone = action.payload.timezone;
+      state.currency = action.payload.currency;
     }
   }
 });
 
-export const { setTimezone, hydrateSettings } = settingsSlice.actions;
+export const { setTimezone, setCurrency, hydrateSettings } = settingsSlice.actions;
 export default settingsSlice.reducer;

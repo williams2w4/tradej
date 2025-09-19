@@ -13,5 +13,6 @@ class UserSetting(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     timezone: Mapped[str] = mapped_column(String(50))
+    currency: Mapped[str] = mapped_column(String(10), default="USD")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

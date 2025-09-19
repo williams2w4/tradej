@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db
+from app.core.currency import convert_amount, normalize_currency
 from app.models import Asset, AssetType, ParentTrade
 from app.models.trade import TradeDirection
 from app.schemas.calendar import CalendarDay
@@ -30,6 +32,13 @@ def _month_bounds(year: int, month: int, timezone: str) -> tuple[datetime, datet
     return start_local.astimezone(ZoneInfo("UTC")), end_local.astimezone(ZoneInfo("UTC"))
 
 
+def _year_bounds(year: int, timezone: str) -> tuple[datetime, datetime]:
+    tz = ZoneInfo(timezone)
+    start_local = datetime(year, 1, 1, tzinfo=tz)
+    end_local = datetime(year + 1, 1, 1, tzinfo=tz)
+    return start_local.astimezone(ZoneInfo("UTC")), end_local.astimezone(ZoneInfo("UTC"))
+
+
 @router.get("", response_model=list[CalendarDay])
 async def calendar_view(
     year: int = Query(..., ge=1900, le=2100),
@@ -38,9 +47,16 @@ async def calendar_view(
     asset_type: AssetType | None = None,
     direction: TradeDirection | None = None,
     timezone: str = Query(default="UTC"),
+    currency: str = Query(default="USD"),
+    mode: str = Query(default="month"),
     db: AsyncSession = Depends(get_db),
 ) -> list[CalendarDay]:
-    start_utc, end_utc = _month_bounds(year, month, timezone)
+    target_currency = normalize_currency(currency)
+
+    if mode == "year":
+        start_utc, end_utc = _year_bounds(year, timezone)
+    else:
+        start_utc, end_utc = _month_bounds(year, month, timezone)
 
     stmt = (
         select(ParentTrade)
@@ -73,17 +89,32 @@ async def calendar_view(
     trades = result.scalars().all()
 
     tz = ZoneInfo(timezone)
-    buckets: dict[date, dict[str, float | int]] = defaultdict(lambda: {"count": 0, "pnl": 0.0})
+
+    def default_bucket() -> dict[str, int | Decimal]:
+        return {"count": 0, "wins": 0, "pnl": Decimal("0")}
+
+    buckets: dict[date, dict[str, int | Decimal]] = defaultdict(default_bucket)
 
     for trade in trades:
         reference = trade.close_time or trade.open_time
         local_dt = reference.astimezone(tz)
-        day = local_dt.date()
-        bucket = buckets[day]
+        if mode == "year":
+            bucket_key = date(local_dt.year, local_dt.month, 1)
+        else:
+            bucket_key = local_dt.date()
+        bucket = buckets[bucket_key]
         bucket["count"] = int(bucket["count"]) + 1
-        bucket["pnl"] = float(bucket["pnl"]) + float(trade.profit_loss)
+        pnl = convert_amount(trade.profit_loss, trade.currency, target_currency)
+        if pnl > 0:
+            bucket["wins"] = int(bucket["wins"]) + 1
+        bucket["pnl"] = Decimal(bucket["pnl"]) + pnl
 
     return [
-        CalendarDay(date=day, trade_count=int(data["count"]), total_profit_loss=float(data["pnl"]))
+        CalendarDay(
+            date=day,
+            trade_count=int(data["count"]),
+            total_profit_loss=float(data["pnl"]),
+            win_rate=(int(data["wins"]) / int(data["count"])) if data["count"] else 0.0,
+        )
         for day, data in sorted(buckets.items(), key=lambda item: item[0])
     ]

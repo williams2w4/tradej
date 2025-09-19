@@ -6,7 +6,7 @@ export const fetchSettings = async (): Promise<Settings> => {
   return response.data;
 };
 
-export const updateSettings = async (settings: Settings): Promise<Settings> => {
+export const updateSettings = async (settings: Partial<Settings>): Promise<Settings> => {
   const response = await client.patch<Settings>("/settings", settings);
   return response.data;
 };

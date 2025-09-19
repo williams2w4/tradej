@@ -17,6 +17,7 @@ class TradeFillBase(BaseModel):
     price: float
     commission: float
     currency: str
+    original_currency: str
     trade_time: datetime
     source: str | None = None
     order_id: str | None = None
@@ -36,6 +37,7 @@ class ParentTradeBase(BaseModel):
     total_commission: float
     profit_loss: float
     currency: str
+    original_currency: str
 
 class ParentTradeWithFills(ParentTradeBase):
     fills: Sequence[TradeFillBase]

@@ -8,6 +8,7 @@ export interface TradeQuery {
   start?: string | null;
   end?: string | null;
   timezone?: string;
+  currency?: string;
 }
 
 export const fetchTrades = async (params: TradeQuery): Promise<ParentTrade[]> => {
