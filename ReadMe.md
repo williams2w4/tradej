@@ -29,6 +29,8 @@ A full-stack trade journal management system featuring a React + Vite frontend a
    ```bash
    cd frontend
    npm install
+   # optional: override the backend API target (defaults to http://localhost:8000)
+   # export VITE_PROXY_TARGET="http://localhost:8000"
    npm run dev
    ```
 
@@ -39,6 +41,9 @@ docker-compose up --build
 ```
 
 The backend will be accessible at `http://localhost:8000`, and the Vite dev server at `http://localhost:5173`.
+The frontend container forwards API calls to the backend using the `VITE_PROXY_TARGET`
+environment variable, which defaults to `http://localhost:8000` for local development and
+is automatically set to `http://backend:8000` inside Docker Compose.
 
 ## Testing
 
