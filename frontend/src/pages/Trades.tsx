@@ -108,7 +108,7 @@ const Trades = () => {
         {
           title: "方向",
           dataIndex: "side",
-          render: (value: string) => (value === "long" ? "Long" : "Short")
+          render: (value: TradeFill["side"]) => (value === "BUY" ? "Buy" : "Sell")
         },
         { title: "数量", dataIndex: "quantity" },
         {
