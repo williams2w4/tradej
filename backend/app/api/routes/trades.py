@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db
+from app.core.currency import convert_amount, normalize_currency
 from app.models import Asset, AssetType, ParentTrade, TradeFill
 from app.models.trade import FillSide, TradeDirection
 from app.schemas.trade import ParentTradeWithFills, TradeFillBase
@@ -26,15 +27,24 @@ def _parse_datetime(dt: datetime | None, timezone: str) -> datetime | None:
     return dt.astimezone(ZoneInfo("UTC"))
 
 
-def _serialize_trade(trade: ParentTrade) -> ParentTradeWithFills:
+def _serialize_trade(trade: ParentTrade, target_currency: str | None = None) -> ParentTradeWithFills:
+    original_currency = normalize_currency(trade.currency)
+    display_currency = normalize_currency(target_currency) if target_currency else original_currency
+
+    def convert_trade_value(value: float | None) -> float | None:
+        if value is None:
+            return None
+        return float(convert_amount(value, original_currency, display_currency))
+
     fills = [
         TradeFillBase(
             id=fill.id,
             side=fill.side,
             quantity=float(fill.quantity),
-            price=float(fill.price),
-            commission=float(fill.commission),
-            currency=fill.currency,
+            price=float(convert_amount(fill.price, fill.currency, display_currency)),
+            commission=float(convert_amount(fill.commission, fill.currency, display_currency)),
+            currency=display_currency,
+            original_currency=normalize_currency(fill.currency),
             trade_time=fill.trade_time,
             source=fill.source,
             order_id=fill.order_id,
@@ -50,11 +60,12 @@ def _serialize_trade(trade: ParentTrade) -> ParentTradeWithFills:
         quantity=float(trade.quantity),
         open_time=trade.open_time,
         close_time=trade.close_time,
-        open_price=float(trade.open_price) if trade.open_price is not None else None,
-        close_price=float(trade.close_price) if trade.close_price is not None else None,
-        total_commission=float(trade.total_commission),
-        profit_loss=float(trade.profit_loss),
-        currency=trade.currency,
+        open_price=convert_trade_value(float(trade.open_price)) if trade.open_price is not None else None,
+        close_price=convert_trade_value(float(trade.close_price)) if trade.close_price is not None else None,
+        total_commission=float(convert_amount(trade.total_commission, original_currency, display_currency)),
+        profit_loss=float(convert_amount(trade.profit_loss, original_currency, display_currency)),
+        currency=display_currency,
+        original_currency=original_currency,
         fills=fills,
     )
 
@@ -68,6 +79,7 @@ async def list_trades(
     end: datetime | None = Query(default=None),
     timezone: str = Query(default="UTC"),
     db: AsyncSession = Depends(get_db),
+    currency: str | None = Query(default=None),
 ) -> list[ParentTradeWithFills]:
     start_utc = _parse_datetime(start, timezone)
     end_utc = _parse_datetime(end, timezone)
@@ -96,7 +108,8 @@ async def list_trades(
 
     result = await db.execute(stmt)
     trades = result.scalars().unique().all()
-    return [_serialize_trade(trade) for trade in trades]
+    target_currency = normalize_currency(currency) if currency else None
+    return [_serialize_trade(trade, target_currency) for trade in trades]
 
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)

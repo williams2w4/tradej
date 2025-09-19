@@ -8,6 +8,8 @@ export interface CalendarQuery {
   assetType?: string | null;
   direction?: string | null;
   timezone?: string;
+  currency?: string;
+  mode?: "month" | "year";
 }
 
 export const fetchCalendar = async (params: CalendarQuery): Promise<CalendarDay[]> => {

@@ -1,6 +1,7 @@
 export type AssetType = "stock" | "option" | "future";
 export type TradeDirection = "long" | "short";
 export type FillSide = "BUY" | "SELL";
+export type CurrencyCode = "USD" | "HKD" | "EUR" | "JPY" | "CNY";
 
 export interface TradeFill {
   id: number;
@@ -9,6 +10,7 @@ export interface TradeFill {
   price: number;
   commission: number;
   currency: string;
+  original_currency: string;
   trade_time: string;
   source?: string | null;
   order_id?: string | null;
@@ -28,6 +30,7 @@ export interface ParentTrade {
   total_commission: number;
   profit_loss: number;
   currency: string;
+  original_currency: string;
   fills: TradeFill[];
 }
 
@@ -52,6 +55,7 @@ export interface CalendarDay {
   date: string;
   trade_count: number;
   total_profit_loss: number;
+  win_rate: number;
 }
 
 export interface ImportBatch {
@@ -68,6 +72,7 @@ export interface ImportBatch {
 
 export interface Settings {
   timezone: string;
+  currency: CurrencyCode;
 }
 
 export type DateRangePreset =

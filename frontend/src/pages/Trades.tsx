@@ -10,6 +10,7 @@ import { formatCurrency, formatDateTime } from "../utils/date";
 const Trades = () => {
   const filters = useAppSelector((state) => state.filters);
   const timezone = useAppSelector((state) => state.settings.timezone);
+  const currency = useAppSelector((state) => state.settings.currency);
   const [trades, setTrades] = useState<ParentTrade[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -22,9 +23,18 @@ const Trades = () => {
       direction: filters.direction,
       start: filters.startDate,
       end: filters.endDate,
-      timezone
+      timezone,
+      currency
     }),
-    [filters.assetCode, filters.assetType, filters.direction, filters.startDate, filters.endDate, timezone]
+    [
+      filters.assetCode,
+      filters.assetType,
+      filters.direction,
+      filters.startDate,
+      filters.endDate,
+      timezone,
+      currency
+    ]
   );
 
   useEffect(() => {
@@ -85,8 +95,17 @@ const Trades = () => {
       columns={[
         { title: "方向", dataIndex: "side" },
         { title: "数量", dataIndex: "quantity" },
-        { title: "价格", dataIndex: "price", render: (value: number) => value.toFixed(2) },
-        { title: "佣金", dataIndex: "commission", render: (value: number) => value.toFixed(2) },
+        {
+          title: "价格",
+          dataIndex: "price",
+          render: (_: number, record: TradeFill) => formatCurrency(record.price, record.currency)
+        },
+        {
+          title: "佣金",
+          dataIndex: "commission",
+          render: (_: number, record: TradeFill) => formatCurrency(record.commission, record.currency)
+        },
+        { title: "原始货币", dataIndex: "original_currency" },
         {
           title: "成交时间",
           dataIndex: "trade_time",
@@ -120,17 +139,28 @@ const Trades = () => {
           columns={[
             { title: "记录ID", dataIndex: "id" },
             { title: "资产代码", dataIndex: "asset_code" },
-            { title: "方向", dataIndex: "direction" },
+            {
+              title: "方向",
+              dataIndex: "direction",
+              render: (value: string) => (
+                <span style={{ color: value === "long" ? "#3f8600" : "#cf1322" }}>
+                  {value === "long" ? "做多" : "做空"}
+                </span>
+              )
+            },
             { title: "数量", dataIndex: "quantity" },
+            { title: "原始货币", dataIndex: "original_currency" },
             {
               title: "开仓价格",
               dataIndex: "open_price",
-              render: (value: number | null) => (value !== null ? value.toFixed(2) : "--")
+              render: (value: number | null, record: ParentTrade) =>
+                value !== null ? formatCurrency(value, record.currency) : "--"
             },
             {
               title: "平仓价格",
               dataIndex: "close_price",
-              render: (value: number | null) => (value !== null ? value.toFixed(2) : "--")
+              render: (value: number | null, record: ParentTrade) =>
+                value !== null ? formatCurrency(value, record.currency) : "--"
             },
             {
               title: "开仓时间",
@@ -145,12 +175,17 @@ const Trades = () => {
             {
               title: "佣金",
               dataIndex: "total_commission",
-              render: (_: number, record: ParentTrade) => formatCurrency(record.total_commission, record.currency)
+              render: (_: number, record: ParentTrade) =>
+                formatCurrency(record.total_commission, record.currency)
             },
             {
               title: "盈亏",
               dataIndex: "profit_loss",
-              render: (_: number, record: ParentTrade) => formatCurrency(record.profit_loss, record.currency)
+              render: (_: number, record: ParentTrade) => (
+                <span style={{ color: record.profit_loss >= 0 ? "#3f8600" : "#cf1322" }}>
+                  {formatCurrency(record.profit_loss, record.currency)}
+                </span>
+              )
             }
           ]}
         />

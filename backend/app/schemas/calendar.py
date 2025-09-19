@@ -9,3 +9,4 @@ class CalendarDay(BaseModel):
     date: date
     trade_count: int
     total_profit_loss: float
+    win_rate: float
