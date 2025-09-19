@@ -2,8 +2,8 @@ import client from "./client";
 import { ParentTrade } from "../types";
 
 export interface TradeQuery {
-  assetCode?: string | null;
-  assetType?: string | null;
+  asset_code?: string | null;
+  asset_type?: string | null;
   direction?: string | null;
   start?: string | null;
   end?: string | null;

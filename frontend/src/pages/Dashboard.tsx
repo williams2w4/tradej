@@ -17,8 +17,8 @@ const Dashboard = () => {
 
   const query = useMemo(
     () => ({
-      assetCode: filters.assetCode,
-      assetType: filters.assetType,
+      asset_code: filters.assetCode,
+      asset_type: filters.assetType,
       direction: filters.direction,
       start: filters.startDate,
       end: filters.endDate,
