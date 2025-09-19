@@ -108,7 +108,7 @@ const Trades = () => {
         {
           title: "方向",
           dataIndex: "side",
-          render: (value: string) => (value === "long" ? "Long" : "Short")
+          render: (value: string) => (value === "BUY" ? "Long" : "Short")
         },
         { title: "数量", dataIndex: "quantity" },
         {
@@ -160,8 +160,8 @@ const Trades = () => {
               title: "方向",
               dataIndex: "direction",
               render: (value: string) => (
-                <span style={{ color: value === "long" ? "#3f8600" : "#cf1322" }}>
-                  {value === "long" ? "Long" : "Short"}
+                <span style={{ color: value === "BUY" ? "#3f8600" : "#cf1322" }}>
+                  {value === "BUY" ? "Long" : "Short"}
                 </span>
               )
             },
