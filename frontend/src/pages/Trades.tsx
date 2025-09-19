@@ -105,17 +105,23 @@ const Trades = () => {
       pagination={false}
       size="small"
       columns={[
-        { title: "方向", dataIndex: "side" },
+        {
+          title: "方向",
+          dataIndex: "side",
+          render: (value: string) => (value === "long" ? "Long" : "Short")
+        },
         { title: "数量", dataIndex: "quantity" },
         {
           title: "价格",
           dataIndex: "price",
-          render: (_: number, record: TradeFill) => formatCurrency(record.price, record.currency)
+          render: (_: number, record: TradeFill) =>
+            formatCurrency(record.price, record.currency, false)
         },
         {
           title: "佣金",
           dataIndex: "commission",
-          render: (_: number, record: TradeFill) => formatCurrency(record.commission, record.currency)
+          render: (_: number, record: TradeFill) =>
+            formatCurrency(record.commission, record.currency, false)
         },
         { title: "原始货币", dataIndex: "original_currency" },
         {
@@ -155,7 +161,7 @@ const Trades = () => {
               dataIndex: "direction",
               render: (value: string) => (
                 <span style={{ color: value === "long" ? "#3f8600" : "#cf1322" }}>
-                  {value === "long" ? "做多" : "做空"}
+                  {value === "long" ? "Long" : "Short"}
                 </span>
               )
             },
@@ -165,13 +171,13 @@ const Trades = () => {
               title: "开仓价格",
               dataIndex: "open_price",
               render: (value: number | null, record: ParentTrade) =>
-                value !== null ? formatCurrency(value, record.currency) : "--"
+                value !== null ? formatCurrency(value, record.currency, false) : "--"
             },
             {
               title: "平仓价格",
               dataIndex: "close_price",
               render: (value: number | null, record: ParentTrade) =>
-                value !== null ? formatCurrency(value, record.currency) : "--"
+                value !== null ? formatCurrency(value, record.currency, false) : "--"
             },
             {
               title: "开仓时间",
@@ -187,14 +193,14 @@ const Trades = () => {
               title: "佣金",
               dataIndex: "total_commission",
               render: (_: number, record: ParentTrade) =>
-                formatCurrency(record.total_commission, record.currency)
+                formatCurrency(record.total_commission, record.currency, false)
             },
             {
               title: "盈亏",
               dataIndex: "profit_loss",
               render: (_: number, record: ParentTrade) => (
                 <span style={{ color: record.profit_loss >= 0 ? "#3f8600" : "#cf1322" }}>
-                  {formatCurrency(record.profit_loss, record.currency)}
+                  {formatCurrency(record.profit_loss, record.currency, false)}
                 </span>
               )
             },

@@ -102,7 +102,7 @@ const CalendarPage = () => {
           borderRadius: 8,
           padding: 10,
           textAlign: "center",
-          background: entry ? (isPositive ? "#b7eb8f" : "#ff9c8a") : undefined
+          background: entry ? (isPositive ? "#d3f3ba" : "#ffc7bd") : undefined
         }}
       >
         <Typography.Text strong style={{ fontSize: 26 }}>
@@ -171,7 +171,7 @@ const CalendarPage = () => {
           alignItems: "center",
           gap: 12,
           textAlign: "center",
-          background: entry ? (isPositive ? "#b7eb8f" : "#ff9c8a") : undefined
+          background: entry ? (isPositive ? "#d3f3ba" : "#ffc7bd") : undefined
         }}
       >
         <Typography.Text strong style={{ fontSize: 26 }}>
