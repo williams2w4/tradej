@@ -4,8 +4,8 @@ import { CalendarDay } from "../types";
 export interface CalendarQuery {
   year: number;
   month: number;
-  assetCode?: string | null;
-  assetType?: string | null;
+  asset_code?: string | null;
+  asset_type?: string | null;
   direction?: string | null;
   timezone?: string;
   currency?: string;

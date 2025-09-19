@@ -8,7 +8,7 @@ import FilterBar from "../components/FilterBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { setDateRange, setPreset } from "../store/filterSlice";
 import { CalendarDay } from "../types";
-import { formatCurrency, formatPercentage } from "../utils/date";
+import { formatPercentage } from "../utils/date";
 import { useNavigate } from "react-router-dom";
 
 const CalendarPage = () => {
@@ -24,8 +24,8 @@ const CalendarPage = () => {
 
   const query = useMemo(
     () => ({
-      assetCode: filters.assetCode,
-      assetType: filters.assetType,
+      asset_code: filters.assetCode,
+      asset_type: filters.assetType,
       direction: filters.direction
     }),
     [filters.assetCode, filters.assetType, filters.direction]
@@ -66,27 +66,36 @@ const CalendarPage = () => {
     const entry = data[key];
     const isPositive = (entry?.total_profit_loss ?? 0) >= 0;
 
+    const tradeCountText = `${entry?.trade_count ?? 0}笔`;
+    const winRateText = entry ? formatPercentage(entry.win_rate) : "0.00%";
+    const profitLoss = entry?.total_profit_loss ?? 0;
+    const profitText = new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(profitLoss);
+
     return (
       <div
         style={{
           minHeight: 110,
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 6,
           borderRadius: 8,
           padding: 8,
+          textAlign: "center",
           background: entry ? (isPositive ? "#f6ffed" : "#fff1f0") : undefined
         }}
       >
-        <Typography.Text strong style={{ fontSize: 16 }}>
+        <Typography.Text strong style={{ fontSize: 21 }}>
           {current.date()}
         </Typography.Text>
-        <Typography.Text>交易笔数：{entry?.trade_count ?? 0}</Typography.Text>
-        <Typography.Text>
-          胜率：{entry ? formatPercentage(entry.win_rate) : "0.00%"}
-        </Typography.Text>
+        <Typography.Text>{tradeCountText}</Typography.Text>
+        <Typography.Text>{winRateText}</Typography.Text>
         <Typography.Text style={{ color: isPositive ? "#3f8600" : "#cf1322" }}>
-          总盈亏：{formatCurrency(entry?.total_profit_loss ?? 0, currency)}
+          {profitText}
         </Typography.Text>
       </div>
     );
@@ -100,6 +109,14 @@ const CalendarPage = () => {
     const entry = data[key];
     const isPositive = (entry?.total_profit_loss ?? 0) >= 0;
 
+    const tradeCountText = `${entry?.trade_count ?? 0}笔`;
+    const winRateText = entry ? formatPercentage(entry.win_rate) : "0.00%";
+    const profitLoss = entry?.total_profit_loss ?? 0;
+    const profitText = new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(profitLoss);
+
     return (
       <div
         style={{
@@ -108,30 +125,40 @@ const CalendarPage = () => {
           padding: 12,
           display: "flex",
           flexDirection: "column",
-          gap: 4,
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 8,
+          textAlign: "center",
           background: entry ? (isPositive ? "#f6ffed" : "#fff1f0") : undefined
         }}
       >
-        <Typography.Text strong style={{ fontSize: 16 }}>
+        <Typography.Text strong style={{ fontSize: 21 }}>
           {current.format("MM月")}
         </Typography.Text>
-        <Typography.Text>交易笔数：{entry?.trade_count ?? 0}</Typography.Text>
-        <Typography.Text>
-          胜率：{entry ? formatPercentage(entry.win_rate) : "0.00%"}
-        </Typography.Text>
+        <Typography.Text>{tradeCountText}</Typography.Text>
+        <Typography.Text>{winRateText}</Typography.Text>
         <Typography.Text style={{ color: isPositive ? "#3f8600" : "#cf1322" }}>
-          总盈亏：{formatCurrency(entry?.total_profit_loss ?? 0, currency)}
+          {profitText}
         </Typography.Text>
       </div>
     );
   };
 
-  const handleSelect = (date: Dayjs) => {
-    if (mode === "year") {
-      setValue(date);
+  const handleSelect = (
+    date: Dayjs,
+    info: { source: "year" | "month" | "date" | "customize" }
+  ) => {
+    setValue(date);
+
+    if (mode === "year" && info.source === "month") {
       setMode("month");
       return;
     }
+
+    if (info.source !== "date") {
+      return;
+    }
+
     const start = date.startOf("day").toISOString();
     const end = date.endOf("day").toISOString();
     dispatch(setDateRange({ startDate: start, endDate: end }));

@@ -144,21 +144,94 @@ async def export_fills(
     if not fills:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No fills to export")
 
-    lines = ["//@version=5", "indicator(\"Trade Journal Fills\", overlay=true)"]
-    lines.append("var int[] tradeTimes = array.new_int()")
-    lines.append("var string[] tradeTexts = array.new_string()")
-    lines.append("if barstate.isfirst")
-    for fill in fills:
-        timestamp = int(fill.trade_time.timestamp() * 1000)
-        side_text = "BUY" if fill.side == FillSide.BUY else "SELL"
-        text = f"{fill.asset.code} {side_text} {float(fill.quantity)}@{float(fill.price)}"
-        safe_text = text.replace("\"", "\\\"")
-        lines.append(f"    array.push(tradeTimes, {timestamp})")
-        lines.append(f"    array.push(tradeTexts, \"{safe_text}\")")
-    lines.append("for i = 0 to array.size(tradeTimes) - 1")
-    lines.append("    if time == array.get(tradeTimes, i)")
-    lines.append(
-        "        label.new(bar_index, close, array.get(tradeTexts, i), style=label.style_label_down, color=color.new(color.blue, 0))"
+    target_timezone_name = timezone
+    try:
+        target_tz = ZoneInfo(timezone)
+    except Exception:  # noqa: BLE001
+        target_tz = ZoneInfo("UTC")
+        target_timezone_name = "UTC"
+
+    def _format_number(value: float) -> str:
+        text = f"{value:.6f}"
+        text = text.rstrip("0").rstrip(".")
+        return text if text else "0"
+
+    safe_timezone = target_timezone_name.replace("\\", "\\\\").replace("\"", "\\\"")
+    recent_fills = fills[-100:]
+
+    lines = [
+        "//@version=5",
+        'indicator("交易记录可视化", "Trade Records", overlay=true, max_labels_count=500, max_lines_count=500)',
+        "",
+        'show_buy_labels = input.bool(true, "显示买入标记", group="显示选项")',
+        'show_sell_labels = input.bool(true, "显示卖出标记", group="显示选项")',
+        "",
+        "var string[] tradeData = array.new_string()",
+        "",
+        "if barstate.isfirst",
+        "    array.clear(tradeData)",
+    ]
+
+    if len(fills) > 100:
+        lines.append(f"    // 仅展示最近100条交易，共{len(fills)}条记录")
+
+    for fill in recent_fills:
+        trade_time_local = fill.trade_time.astimezone(target_tz)
+        time_str = trade_time_local.strftime("%Y-%m-%dT%H:%M:%S")
+        side = 1 if fill.side == FillSide.BUY else -1
+        qty_text = _format_number(float(fill.quantity))
+        price_text = _format_number(float(fill.price))
+        direction_text = "long" if side > 0 else "short"
+        comment = f"{fill.asset.code} {direction_text} {qty_text}@{price_text}"
+        safe_comment = comment.replace("\\", "\\\\").replace("\"", "\\\"")
+        entry = f"{time_str},{side},{qty_text},{price_text},{safe_comment}"
+        safe_entry = entry.replace("\\", "\\\\").replace("\"", "\\\"")
+        lines.append(f'    array.push(tradeData, "{safe_entry}")')
+
+    lines.extend(
+        [
+            "",
+            "parse_trade_time(time_str) =>",
+            "    year_str = str.substring(time_str, 0, 4)",
+            "    month_str = str.substring(time_str, 5, 7)",
+            "    day_str = str.substring(time_str, 8, 10)",
+            "    hour_str = str.substring(time_str, 11, 13)",
+            "    min_str = str.substring(time_str, 14, 16)",
+            "    sec_str = str.substring(time_str, 17, 19)",
+            "    year_int = math.round(str.tonumber(year_str))",
+            "    month_int = math.round(str.tonumber(month_str))",
+            "    day_int = math.round(str.tonumber(day_str))",
+            "    hour_int = math.round(str.tonumber(hour_str))",
+            "    min_int = math.round(str.tonumber(min_str))",
+            "    sec_int = math.round(str.tonumber(sec_str))",
+            f'    timestamp("{safe_timezone}", year_int, month_int, day_int, hour_int, min_int, sec_int)',
+            "",
+            "if barstate.islast",
+            "    for i = 0 to array.size(tradeData) - 1",
+            "        trade_str = array.get(tradeData, i)",
+            '        parts = str.split(trade_str, ",")',
+            "        if array.size(parts) >= 5",
+            "            time_str = array.get(parts, 0)",
+            "            side_str = array.get(parts, 1)",
+            "            qty_str = array.get(parts, 2)",
+            "            price_str = array.get(parts, 3)",
+            "            comment = array.get(parts, 4)",
+            "            trade_time = parse_trade_time(time_str)",
+            "            side = str.tonumber(side_str)",
+            "            qty = str.tonumber(qty_str)",
+            "            price = str.tonumber(price_str)",
+            "            target_index = ta.valuewhen(time <= trade_time, bar_index, 0)",
+            "            if not na(target_index)",
+            "                label_price = price",
+            "                if side > 0 and show_buy_labels",
+            '                    buy_text = "BUY\n" + str.tostring(qty, "#.####") + "\n" + str.tostring(price, "#.####")',
+            "                    label.new(int(target_index), label_price, buy_text, style=label.style_label_up, color=color.new(color.green, 0), textcolor=color.white, tooltip=comment, xloc=xloc.bar_index)",
+            "                else if side < 0 and show_sell_labels",
+            '                    sell_text = "SELL\n" + str.tostring(qty, "#.####") + "\n" + str.tostring(price, "#.####")',
+            "                    label.new(int(target_index), label_price, sell_text, style=label.style_label_down, color=color.new(color.red, 0), textcolor=color.white, tooltip=comment, xloc=xloc.bar_index)",
+            "",
+            "plot(na)",
+        ]
     )
 
     return "\n".join(lines)
