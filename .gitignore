@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.sqlite3
+.venv/
+.env
+.env.*
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+
+# VSCode
+.vscode/
