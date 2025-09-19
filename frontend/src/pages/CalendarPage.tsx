@@ -8,7 +8,7 @@ import FilterBar from "../components/FilterBar";
 import { useAppDispatch, useAppSelector } from "../hooks";
 import { setDateRange, setPreset } from "../store/filterSlice";
 import { CalendarDay } from "../types";
-import { formatPercentage } from "../utils/date";
+import { formatCurrency } from "../utils/date";
 import { useNavigate } from "react-router-dom";
 
 const CalendarPage = () => {
@@ -77,7 +77,7 @@ const CalendarPage = () => {
             padding: 8
           }}
         >
-          <Typography.Text strong style={{ fontSize: 21 }}>
+          <Typography.Text strong style={{ fontSize: 24 }}>
             {current.date()}
           </Typography.Text>
         </div>
@@ -86,12 +86,9 @@ const CalendarPage = () => {
     const isPositive = (entry?.total_profit_loss ?? 0) >= 0;
 
     const tradeCountText = `${entry?.trade_count ?? 0}笔`;
-    const winRateText = entry ? formatPercentage(entry.win_rate) : "0.00%";
+    const winRateText = `${Math.round((entry?.win_rate ?? 0) * 100)}%`;
     const profitLoss = entry?.total_profit_loss ?? 0;
-    const profitText = new Intl.NumberFormat(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(profitLoss);
+    const profitText = formatCurrency(profitLoss, currency, false, 0);
 
     return (
       <div
@@ -101,21 +98,31 @@ const CalendarPage = () => {
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          gap: 6,
+          gap: 10,
           borderRadius: 8,
-          padding: 8,
+          padding: 10,
           textAlign: "center",
-          background: entry ? (isPositive ? "#f6ffed" : "#fff1f0") : undefined
+          background: entry ? (isPositive ? "#b7eb8f" : "#ff9c8a") : undefined
         }}
       >
-        <Typography.Text strong style={{ fontSize: 21 }}>
+        <Typography.Text strong style={{ fontSize: 26 }}>
           {current.date()}
         </Typography.Text>
-        <Typography.Text>{tradeCountText}</Typography.Text>
-        <Typography.Text>{winRateText}</Typography.Text>
-        <Typography.Text style={{ color: isPositive ? "#3f8600" : "#cf1322" }}>
+        <Typography.Text style={{ fontSize: 20, color: isPositive ? "#3f8600" : "#cf1322" }}>
           {profitText}
         </Typography.Text>
+        <div
+          style={{
+            display: "flex",
+            gap: 16,
+            fontSize: 16,
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <Typography.Text>{tradeCountText}</Typography.Text>
+          <Typography.Text>{winRateText}</Typography.Text>
+        </div>
       </div>
     );
   };
@@ -148,36 +155,43 @@ const CalendarPage = () => {
     const isPositive = (entry?.total_profit_loss ?? 0) >= 0;
 
     const tradeCountText = `${entry?.trade_count ?? 0}笔`;
-    const winRateText = entry ? formatPercentage(entry.win_rate) : "0.00%";
+    const winRateText = `${Math.round((entry?.win_rate ?? 0) * 100)}%`;
     const profitLoss = entry?.total_profit_loss ?? 0;
-    const profitText = new Intl.NumberFormat(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(profitLoss);
+    const profitText = formatCurrency(profitLoss, currency, false, 0);
 
     return (
       <div
         style={{
           minHeight: 120,
           borderRadius: 10,
-          padding: 12,
+          padding: 14,
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
           alignItems: "center",
-          gap: 8,
+          gap: 12,
           textAlign: "center",
-          background: entry ? (isPositive ? "#f6ffed" : "#fff1f0") : undefined
+          background: entry ? (isPositive ? "#b7eb8f" : "#ff9c8a") : undefined
         }}
       >
-        <Typography.Text strong style={{ fontSize: 21 }}>
+        <Typography.Text strong style={{ fontSize: 26 }}>
           {current.format("MM月")}
         </Typography.Text>
-        <Typography.Text>{tradeCountText}</Typography.Text>
-        <Typography.Text>{winRateText}</Typography.Text>
-        <Typography.Text style={{ color: isPositive ? "#3f8600" : "#cf1322" }}>
+        <Typography.Text style={{ fontSize: 20, color: isPositive ? "#3f8600" : "#cf1322" }}>
           {profitText}
         </Typography.Text>
+        <div
+          style={{
+            display: "flex",
+            gap: 16,
+            fontSize: 16,
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          <Typography.Text>{tradeCountText}</Typography.Text>
+          <Typography.Text>{winRateText}</Typography.Text>
+        </div>
       </div>
     );
   };
