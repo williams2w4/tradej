@@ -30,21 +30,29 @@ def _parse_datetime(dt: datetime | None, timezone: str) -> datetime | None:
 def _serialize_trade(trade: ParentTrade) -> ParentTradeWithFills:
     original_currency = normalize_currency(trade.currency)
 
-    fills = [
-        TradeFillBase(
-            id=fill.id,
-            side=fill.side,
-            quantity=float(fill.quantity),
-            price=float(fill.price),
-            commission=float(fill.commission),
-            currency=normalize_currency(fill.currency),
-            original_currency=normalize_currency(fill.currency),
-            trade_time=fill.trade_time,
-            source=fill.source,
-            order_id=fill.order_id,
+    sorted_fills = sorted(trade.fills, key=lambda f: f.trade_time)
+    serialized_fills = []
+    for fill in sorted_fills:
+        direction = (
+            TradeDirection.LONG
+            if fill.side == FillSide.BUY
+            else TradeDirection.SHORT
         )
-        for fill in sorted(trade.fills, key=lambda f: f.trade_time)
-    ]
+        serialized_fills.append(
+            TradeFillBase(
+                id=fill.id,
+                side=fill.side,
+                direction=direction,
+                quantity=float(fill.quantity),
+                price=float(fill.price),
+                commission=float(fill.commission),
+                currency=normalize_currency(fill.currency),
+                original_currency=normalize_currency(fill.currency),
+                trade_time=fill.trade_time,
+                source=fill.source,
+                order_id=fill.order_id,
+            )
+        )
     return ParentTradeWithFills(
         id=trade.id,
         asset_id=trade.asset_id,
@@ -60,7 +68,7 @@ def _serialize_trade(trade: ParentTrade) -> ParentTradeWithFills:
         profit_loss=float(trade.profit_loss),
         currency=original_currency,
         original_currency=original_currency,
-        fills=fills,
+        fills=serialized_fills,
     )
 
 
@@ -181,11 +189,15 @@ async def export_fills(
     for fill in recent_fills:
         trade_time_local = fill.trade_time.astimezone(target_tz)
         time_str = trade_time_local.strftime("%Y-%m-%dT%H:%M:%S")
-        side = 1 if fill.side == FillSide.BUY else -1
+        direction = (
+            TradeDirection.LONG
+            if fill.side == FillSide.BUY
+            else TradeDirection.SHORT
+        )
+        side = 1 if direction == TradeDirection.LONG else -1
         qty_text = _format_number(float(fill.quantity))
         price_text = _format_number(float(fill.price))
-        direction_text = "long" if side > 0 else "short"
-        comment = f"{fill.asset.code} {direction_text} {qty_text}@{price_text}"
+        comment = f"{fill.asset.code} {direction.value} {qty_text}@{price_text}"
         safe_comment = comment.replace("\\", "\\\\").replace("\"", "\\\"")
         entry = f"{time_str},{side},{qty_text},{price_text},{safe_comment}"
         safe_entry = entry.replace("\\", "\\\\").replace("\"", "\\\"")
