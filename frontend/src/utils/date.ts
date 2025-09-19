@@ -65,10 +65,15 @@ export const computeRange = (preset: DateRangePreset, timezone: string): {
   }
 };
 
-export const formatCurrency = (value: number, currency = "USD", withSymbol = true): string => {
+export const formatCurrency = (
+  value: number,
+  currency = "USD",
+  withSymbol = true,
+  fractionDigits = 2
+): string => {
   const options: Intl.NumberFormatOptions = {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits
   };
 
   if (withSymbol) {
