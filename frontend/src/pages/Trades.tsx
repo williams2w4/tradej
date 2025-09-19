@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Popconfirm, Space, Table, message } from "antd";
 
 import FilterBar from "../components/FilterBar";
-import { deleteAllTrades, exportFills, fetchTrades } from "../api/trades";
+import { deleteAllTrades, deleteTrade, exportFills, fetchTrades } from "../api/trades";
 import { useAppSelector } from "../hooks";
 import { ParentTrade, TradeFill } from "../types";
 import { formatCurrency, formatDateTime } from "../utils/date";
@@ -10,11 +10,11 @@ import { formatCurrency, formatDateTime } from "../utils/date";
 const Trades = () => {
   const filters = useAppSelector((state) => state.filters);
   const timezone = useAppSelector((state) => state.settings.timezone);
-  const currency = useAppSelector((state) => state.settings.currency);
   const [trades, setTrades] = useState<ParentTrade[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const query = useMemo(
     () => ({
@@ -23,8 +23,7 @@ const Trades = () => {
       direction: filters.direction,
       start: filters.startDate,
       end: filters.endDate,
-      timezone,
-      currency
+      timezone
     }),
     [
       filters.assetCode,
@@ -32,8 +31,7 @@ const Trades = () => {
       filters.direction,
       filters.startDate,
       filters.endDate,
-      timezone,
-      currency
+      timezone
     ]
   );
 
@@ -72,8 +70,8 @@ const Trades = () => {
     }
   }, [query]);
 
-  const handleDelete = useCallback(async () => {
-    setDeleting(true);
+  const handleDeleteAll = useCallback(async () => {
+    setDeletingAll(true);
     try {
       await deleteAllTrades();
       setTrades([]);
@@ -82,7 +80,21 @@ const Trades = () => {
       console.error(error);
       message.error("删除失败");
     } finally {
-      setDeleting(false);
+      setDeletingAll(false);
+    }
+  }, []);
+
+  const handleDeleteTrade = useCallback(async (tradeId: number) => {
+    setDeletingId(tradeId);
+    try {
+      await deleteTrade(tradeId);
+      setTrades((prev) => prev.filter((trade) => trade.id !== tradeId));
+      message.success("交易已删除");
+    } catch (error) {
+      console.error(error);
+      message.error("删除失败");
+    } finally {
+      setDeletingId(null);
     }
   }, []);
 
@@ -109,7 +121,7 @@ const Trades = () => {
         {
           title: "成交时间",
           dataIndex: "trade_time",
-          render: (value: string) => formatDateTime(value, timezone)
+          render: (value: string) => formatDateTime(value, timezone, true)
         },
         { title: "来源", dataIndex: "source", render: (value: string | null) => value ?? "--" },
         { title: "订单号", dataIndex: "order_id", render: (value: string | null) => value ?? "--" }
@@ -124,7 +136,7 @@ const Trades = () => {
           <Button type="primary" onClick={handleExport} loading={exporting}>
             导出子交易
           </Button>
-          <Popconfirm title="确认删除所有交易？" onConfirm={handleDelete} okButtonProps={{ loading: deleting }}>
+          <Popconfirm title="确认删除所有交易？" onConfirm={handleDeleteAll} okButtonProps={{ loading: deletingAll }}>
             <Button danger>删除所有交易</Button>
           </Popconfirm>
         </Space>
@@ -137,7 +149,6 @@ const Trades = () => {
           rowKey={(trade) => trade.id}
           expandable={{ expandedRowRender: (record) => renderFillTable(record.fills) }}
           columns={[
-            { title: "记录ID", dataIndex: "id" },
             { title: "资产代码", dataIndex: "asset_code" },
             {
               title: "方向",
@@ -165,12 +176,12 @@ const Trades = () => {
             {
               title: "开仓时间",
               dataIndex: "open_time",
-              render: (value: string) => formatDateTime(value, timezone)
+              render: (value: string) => formatDateTime(value, timezone, true)
             },
             {
               title: "平仓时间",
               dataIndex: "close_time",
-              render: (value: string | null) => (value ? formatDateTime(value, timezone) : "--")
+              render: (value: string | null) => (value ? formatDateTime(value, timezone, true) : "--")
             },
             {
               title: "佣金",
@@ -185,6 +196,21 @@ const Trades = () => {
                 <span style={{ color: record.profit_loss >= 0 ? "#3f8600" : "#cf1322" }}>
                   {formatCurrency(record.profit_loss, record.currency)}
                 </span>
+              )
+            },
+            {
+              title: "操作",
+              dataIndex: "actions",
+              render: (_: unknown, record: ParentTrade) => (
+                <Popconfirm
+                  title="确认删除该交易？"
+                  onConfirm={() => handleDeleteTrade(record.id)}
+                  okButtonProps={{ loading: deletingId === record.id }}
+                >
+                  <Button type="link" danger disabled={deletingId === record.id}>
+                    删除
+                  </Button>
+                </Popconfirm>
               )
             }
           ]}
