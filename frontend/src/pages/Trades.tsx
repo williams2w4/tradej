@@ -107,6 +107,15 @@ const Trades = () => {
       columns={[
         {
           title: "方向",
+          dataIndex: "direction",
+          render: (value: TradeFill["direction"]) => (
+            <span style={{ color: value === "long" ? "#3f8600" : "#cf1322" }}>
+              {value === "long" ? "Long" : "Short"}
+            </span>
+          )
+        },
+        {
+          title: "买卖",
           dataIndex: "side",
           render: (value: TradeFill["side"]) => (value === "BUY" ? "Buy" : "Sell")
         },
