@@ -13,6 +13,7 @@ class TradeFillBase(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     side: FillSide
+    direction: TradeDirection
     quantity: float
     price: float
     commission: float

@@ -6,6 +6,7 @@ export type CurrencyCode = "USD" | "HKD" | "EUR" | "JPY" | "CNY";
 export interface TradeFill {
   id: number;
   side: FillSide;
+  direction: TradeDirection;
   quantity: number;
   price: number;
   commission: number;
