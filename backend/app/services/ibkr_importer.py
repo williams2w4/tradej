@@ -5,7 +5,7 @@ import io
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -123,6 +123,52 @@ def _normalize_row(row: dict[str, str], row_number: int) -> NormalizedFill:
     )
 
 
+async def check_duplicate_trades(session: AsyncSession, fills: list[NormalizedFill]) -> set[int]:
+    """
+    检查填充列表中是否有重复的交易记录。
+    返回重复记录在列表中的索引集合。
+    """
+    duplicate_indexes = set()
+    
+    # 收集所有非空的 source (TradeID) 和 order_id (OrderID)
+    sources = []
+    order_ids = []
+    
+    for i, fill in enumerate(fills):
+        if fill.source:
+            sources.append((fill.source, i))
+        if fill.order_id:
+            order_ids.append((fill.order_id, i))
+    
+    if sources:
+        # 查询数据库中已存在的 TradeID
+        source_values = [source for source, _ in sources]
+        existing_sources_result = await session.execute(
+            select(TradeFill.source).where(TradeFill.source.in_(source_values))
+        )
+        existing_sources = {row[0] for row in existing_sources_result.fetchall()}
+        
+        # 标记重复的记录索引
+        for source, index in sources:
+            if source in existing_sources:
+                duplicate_indexes.add(index)
+    
+    if order_ids:
+        # 查询数据库中已存在的 OrderID
+        order_id_values = [order_id for order_id, _ in order_ids]
+        existing_order_ids_result = await session.execute(
+            select(TradeFill.order_id).where(TradeFill.order_id.in_(order_id_values))
+        )
+        existing_order_ids = {row[0] for row in existing_order_ids_result.fetchall()}
+        
+        # 标记重复的记录索引
+        for order_id, index in order_ids:
+            if order_id in existing_order_ids:
+                duplicate_indexes.add(index)
+    
+    return duplicate_indexes
+
+
 async def import_ibkr_csv(
     session: AsyncSession,
     file_bytes: bytes,
@@ -143,13 +189,24 @@ async def import_ibkr_csv(
     if not fills:
         raise ImportValidationError("No trade rows found in file")
 
-    aggregated_trades, _ = aggregate_parent_trades(fills)
+    # 检查重复的交易记录
+    duplicate_indexes = await check_duplicate_trades(session, fills)
+    
+    # 过滤掉重复的记录
+    unique_fills = [fill for i, fill in enumerate(fills) if i not in duplicate_indexes]
+    skipped_count = len(duplicate_indexes)
+    
+    if not unique_fills:
+        raise ImportValidationError("All trade records are duplicates - no new records to import")
+
+    aggregated_trades, _ = aggregate_parent_trades(unique_fills)
 
     batch = ImportBatch(
         broker="ibkr",
         filename=filename,
         status=ImportStatus.PENDING,
-        total_records=len(fills),
+        total_records=len(unique_fills),
+        skipped_records=skipped_count,
         timezone="UTC",
     )
     session.add(batch)
@@ -181,7 +238,7 @@ async def import_ibkr_csv(
 
     parent_models: list[tuple[list[int], ParentTrade]] = []
     for trade in aggregated_trades:
-        first_fill = fills[trade.fill_indexes[0]]
+        first_fill = unique_fills[trade.fill_indexes[0]]
         asset = await get_asset(first_fill.asset_code, first_fill.asset_type, first_fill.timezone, first_fill.exchange)
         parent = ParentTrade(
             asset_id=asset.id,
@@ -205,7 +262,7 @@ async def import_ibkr_csv(
         for fill_index in fill_indexes:
             parent_id_lookup[fill_index] = parent.id
 
-    for idx, fill in enumerate(fills):
+    for idx, fill in enumerate(unique_fills):
         asset = await get_asset(fill.asset_code, fill.asset_type, fill.timezone, fill.exchange)
         trade_fill = TradeFill(
             parent_trade_id=parent_id_lookup.get(idx),

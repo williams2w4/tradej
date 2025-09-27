@@ -24,6 +24,7 @@ class ImportBatch(Base):
     status: Mapped[ImportStatus] = mapped_column(Enum(ImportStatus, name="import_status"), default=ImportStatus.PENDING)
     error_message: Mapped[str | None] = mapped_column(String)
     total_records: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_records: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     timezone: Mapped[str | None] = mapped_column(String(50))

@@ -15,6 +15,7 @@ class ImportBatchRead(BaseModel):
     status: ImportStatus
     error_message: str | None
     total_records: int
+    skipped_records: int
     created_at: datetime
     completed_at: datetime | None
     timezone: str | None
