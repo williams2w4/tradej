@@ -42,6 +42,8 @@ def _load_trades(
         .order_by(ParentTrade.open_time.desc())
     )
     conditions = []
+    # Only include trades that have been closed (close_time is not None)
+    conditions.append(ParentTrade.close_time.is_not(None))
     if asset_code:
         conditions.append(Asset.code == asset_code)
     if asset_type:

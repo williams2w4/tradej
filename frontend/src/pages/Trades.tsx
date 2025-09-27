@@ -198,11 +198,14 @@ const Trades = () => {
             {
               title: "盈亏",
               dataIndex: "profit_loss",
-              render: (_: number, record: ParentTrade) => (
-                <span style={{ color: record.profit_loss >= 0 ? "#3f8600" : "#cf1322" }}>
-                  {formatCurrency(record.profit_loss, record.currency, false)}
-                </span>
-              )
+              render: (_: number | null, record: ParentTrade) =>
+                record.profit_loss !== null ? (
+                  <span style={{ color: record.profit_loss >= 0 ? "#3f8600" : "#cf1322" }}>
+                    {formatCurrency(record.profit_loss, record.currency, false)}
+                  </span>
+                ) : (
+                  "--"
+                )
             },
             {
               title: "操作",

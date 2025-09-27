@@ -63,16 +63,10 @@ async def calendar_view(
         .join(Asset)
         .options(selectinload(ParentTrade.asset))
         .where(
-            (
-                (ParentTrade.close_time >= start_utc)
-                & (ParentTrade.close_time < end_utc)
-                & ParentTrade.close_time.is_not(None)
-            )
-            | (
-                ParentTrade.close_time.is_(None)
-                & (ParentTrade.open_time >= start_utc)
-                & (ParentTrade.open_time < end_utc)
-            )
+            # Only include trades that have been closed
+            ParentTrade.close_time.is_not(None)
+            & (ParentTrade.close_time >= start_utc)
+            & (ParentTrade.close_time < end_utc)
         )
     )
     conditions = []
@@ -96,7 +90,8 @@ async def calendar_view(
     buckets: dict[date, dict[str, int | Decimal]] = defaultdict(default_bucket)
 
     for trade in trades:
-        reference = trade.close_time or trade.open_time
+        # Since we only query closed trades, close_time is never None
+        reference = trade.close_time
         local_dt = reference.astimezone(tz)
         if mode == "year":
             bucket_key = date(local_dt.year, local_dt.month, 1)

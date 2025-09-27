@@ -29,7 +29,7 @@ export interface ParentTrade {
   open_price: number | null;
   close_price: number | null;
   total_commission: number;
-  profit_loss: number;
+  profit_loss: number | null; // null for open positions
   currency: string;
   original_currency: string;
   fills: TradeFill[];

@@ -53,6 +53,9 @@ def _serialize_trade(trade: ParentTrade) -> ParentTradeWithFills:
                 order_id=fill.order_id,
             )
         )
+    # For open positions (close_time is None), don't show profit_loss
+    profit_loss_value = float(trade.profit_loss) if trade.close_time is not None else None
+    
     return ParentTradeWithFills(
         id=trade.id,
         asset_id=trade.asset_id,
@@ -65,7 +68,7 @@ def _serialize_trade(trade: ParentTrade) -> ParentTradeWithFills:
         open_price=float(trade.open_price) if trade.open_price is not None else None,
         close_price=float(trade.close_price) if trade.close_price is not None else None,
         total_commission=float(trade.total_commission),
-        profit_loss=float(trade.profit_loss),
+        profit_loss=profit_loss_value,
         currency=original_currency,
         original_currency=original_currency,
         fills=serialized_fills,

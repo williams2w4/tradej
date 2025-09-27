@@ -36,7 +36,7 @@ class ParentTradeBase(BaseModel):
     open_price: float | None
     close_price: float | None
     total_commission: float
-    profit_loss: float
+    profit_loss: float | None  # None for open positions
     currency: str
     original_currency: str
 
