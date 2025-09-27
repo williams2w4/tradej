@@ -1,11 +1,67 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dayjs from "dayjs";
 import { Button, Card, Popconfirm, Space, Table, message } from "antd";
 
 import FilterBar from "../components/FilterBar";
 import { deleteAllTrades, deleteTrade, exportFills, fetchTrades } from "../api/trades";
 import { useAppSelector } from "../hooks";
-import { ParentTrade, TradeFill } from "../types";
+import { AssetType, FilterState, ParentTrade, TradeDirection, TradeFill } from "../types";
 import { formatCurrency, formatDateTime } from "../utils/date";
+
+const assetTypeLabelMap: Record<AssetType, string> = {
+  stock: "股票",
+  option: "期权",
+  future: "期货"
+};
+
+const directionLabelMap: Record<TradeDirection, string> = {
+  long: "多头",
+  short: "空头"
+};
+
+const sanitizeSegment = (value: string) =>
+  value
+    .trim()
+    .replace(/[\s]+/g, "_")
+    .replace(/[\\/:*?"<>|]+/g, "_");
+
+const buildExportFileName = (filters: FilterState, timezone: string) => {
+  const parts: string[] = [];
+
+  if (filters.assetCode) {
+    parts.push(sanitizeSegment(filters.assetCode));
+  }
+  if (filters.assetType) {
+    const label = assetTypeLabelMap[filters.assetType] ?? filters.assetType;
+    parts.push(sanitizeSegment(label));
+  }
+  if (filters.direction) {
+    const label = directionLabelMap[filters.direction] ?? filters.direction;
+    parts.push(sanitizeSegment(label));
+  }
+
+  const rangeSegment = (() => {
+    if (filters.startDate && filters.endDate) {
+      const start = dayjs(filters.startDate).tz(timezone).format("YYYYMMDD");
+      const end = dayjs(filters.endDate).tz(timezone).format("YYYYMMDD");
+      return start === end ? start : `${start}-${end}`;
+    }
+    if (filters.startDate) {
+      return dayjs(filters.startDate).tz(timezone).format("YYYYMMDD");
+    }
+    if (filters.endDate) {
+      return dayjs(filters.endDate).tz(timezone).format("YYYYMMDD");
+    }
+    return "全部日期";
+  })();
+
+  if (rangeSegment) {
+    parts.push(rangeSegment);
+  }
+
+  const baseName = parts.join("-");
+  return `${baseName || dayjs().tz(timezone).format("YYYYMMDD-HHmmss")}.txt`;
+};
 
 const Trades = () => {
   const filters = useAppSelector((state) => state.filters);
@@ -50,6 +106,11 @@ const Trades = () => {
     void load();
   }, [query]);
 
+  const exportFileName = useMemo(
+    () => buildExportFileName(filters, timezone),
+    [filters.assetCode, filters.assetType, filters.direction, filters.startDate, filters.endDate, timezone]
+  );
+
   const handleExport = useCallback(async () => {
     setExporting(true);
     try {
@@ -58,7 +119,7 @@ const Trades = () => {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "trade_fills.pine";
+      anchor.download = exportFileName;
       anchor.click();
       URL.revokeObjectURL(url);
       message.success("导出成功");
@@ -68,7 +129,7 @@ const Trades = () => {
     } finally {
       setExporting(false);
     }
-  }, [query]);
+  }, [exportFileName, query]);
 
   const handleDeleteAll = useCallback(async () => {
     setDeletingAll(true);
