@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import csv
 import io
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models import (
     Asset,
@@ -18,6 +21,13 @@ from app.models import (
 )
 from app.models.trade import FillSide
 from app.services.aggregation import NormalizedFill, aggregate_parent_trades
+
+
+@dataclass
+class _CombinedFill:
+    normalized: NormalizedFill
+    kind: Literal["existing", "new"]
+    existing_fill: TradeFill | None = None
 
 EXCHANGE_TIMEZONES = {
     "ARCA": "America/New_York",
@@ -199,7 +209,48 @@ async def import_ibkr_csv(
     if not unique_fills:
         raise ImportValidationError("All trade records are duplicates - no new records to import")
 
-    aggregated_trades, _ = aggregate_parent_trades(unique_fills)
+    # 将数据库中未平仓的成交与新成交合并，确保聚合能够跨批次完成匹配
+    combined_records: list[_CombinedFill] = []
+    existing_parent_map: dict[int, ParentTrade] = {}
+
+    asset_codes = {fill.asset_code for fill in unique_fills}
+    if asset_codes:
+        existing_parents_stmt = (
+            select(ParentTrade)
+            .join(Asset)
+            .options(selectinload(ParentTrade.asset), selectinload(ParentTrade.fills))
+            .where(Asset.code.in_(asset_codes), ParentTrade.close_time.is_(None))
+        )
+        result = await session.execute(existing_parents_stmt)
+        existing_parents = result.scalars().unique().all()
+        for parent in existing_parents:
+            existing_parent_map[parent.id] = parent
+            parent_timezone = parent.asset.timezone or "UTC"
+            parent_exchange = parent.asset.exchange
+            sorted_fills = sorted(parent.fills, key=lambda fill: fill.trade_time)
+            for existing_fill in sorted_fills:
+                normalized_existing = NormalizedFill(
+                    asset_code=parent.asset.code,
+                    asset_type=parent.asset.asset_type,
+                    exchange=parent_exchange,
+                    timezone=parent_timezone,
+                    trade_time=existing_fill.trade_time,
+                    side=existing_fill.side,
+                    quantity=float(existing_fill.quantity),
+                    price=float(existing_fill.price),
+                    commission=float(existing_fill.commission),
+                    currency=existing_fill.currency,
+                    order_id=existing_fill.order_id,
+                    source=existing_fill.source,
+                )
+                combined_records.append(
+                    _CombinedFill(normalized=normalized_existing, kind="existing", existing_fill=existing_fill)
+                )
+
+    combined_records.extend(_CombinedFill(normalized=fill, kind="new") for fill in unique_fills)
+
+    combined_normalized = [record.normalized for record in combined_records]
+    aggregated_trades, _ = aggregate_parent_trades(combined_normalized)
 
     batch = ImportBatch(
         broker="ibkr",
@@ -236,36 +287,77 @@ async def import_ibkr_csv(
         asset_cache[symbol] = asset
         return asset
 
-    parent_models: list[tuple[list[int], ParentTrade]] = []
-    for trade in aggregated_trades:
-        first_fill = unique_fills[trade.fill_indexes[0]]
-        asset = await get_asset(first_fill.asset_code, first_fill.asset_type, first_fill.timezone, first_fill.exchange)
-        parent = ParentTrade(
-            asset_id=asset.id,
-            direction=trade.direction,
-            quantity=trade.quantity,
-            open_time=trade.open_time,
-            close_time=trade.close_time,
-            open_price=trade.open_price,
-            close_price=trade.close_price,
-            total_commission=trade.total_commission,
-            profit_loss=trade.profit_loss,
-            currency=trade.currency,
-        )
-        session.add(parent)
-        parent_models.append((trade.fill_indexes, parent))
+    fill_parent_lookup: dict[int, ParentTrade] = {}
+    new_parent_trades: list[ParentTrade] = []
 
-    await session.flush()
+    for aggregated_trade in aggregated_trades:
+        trade_fill_records = [combined_records[index] for index in aggregated_trade.fill_indexes]
+        existing_parent_ids = {
+            record.existing_fill.parent_trade_id
+            for record in trade_fill_records
+            if record.kind == "existing"
+            and record.existing_fill is not None
+            and record.existing_fill.parent_trade_id is not None
+        }
 
-    parent_id_lookup: dict[int, int] = {}
-    for fill_indexes, parent in parent_models:
-        for fill_index in fill_indexes:
-            parent_id_lookup[fill_index] = parent.id
+        parent_model: ParentTrade
+        if existing_parent_ids:
+            if len(existing_parent_ids) > 1:
+                raise ImportValidationError("Existing open fills from multiple parent trades cannot be merged automatically")
+            parent_id = existing_parent_ids.pop()
+            parent_model = existing_parent_map.get(parent_id)
+            if parent_model is None:
+                raise ImportValidationError("Referenced existing parent trade not found during aggregation")
+            parent_model.direction = aggregated_trade.direction
+            parent_model.quantity = aggregated_trade.quantity
+            parent_model.open_time = aggregated_trade.open_time
+            parent_model.close_time = aggregated_trade.close_time
+            parent_model.open_price = aggregated_trade.open_price
+            parent_model.close_price = aggregated_trade.close_price
+            parent_model.total_commission = aggregated_trade.total_commission
+            parent_model.profit_loss = aggregated_trade.profit_loss
+            parent_model.currency = aggregated_trade.currency
+        else:
+            reference_fill = combined_records[aggregated_trade.fill_indexes[0]].normalized
+            asset = await get_asset(
+                reference_fill.asset_code,
+                reference_fill.asset_type,
+                reference_fill.timezone,
+                reference_fill.exchange,
+            )
+            parent_model = ParentTrade(
+                asset_id=asset.id,
+                direction=aggregated_trade.direction,
+                quantity=aggregated_trade.quantity,
+                open_time=aggregated_trade.open_time,
+                close_time=aggregated_trade.close_time,
+                open_price=aggregated_trade.open_price,
+                close_price=aggregated_trade.close_price,
+                total_commission=aggregated_trade.total_commission,
+                profit_loss=aggregated_trade.profit_loss,
+                currency=aggregated_trade.currency,
+            )
+            session.add(parent_model)
+            new_parent_trades.append(parent_model)
 
-    for idx, fill in enumerate(unique_fills):
+        for index in aggregated_trade.fill_indexes:
+            fill_parent_lookup[index] = parent_model
+
+    if new_parent_trades:
+        await session.flush()
+
+    for index, record in enumerate(combined_records):
+        if record.kind == "existing":
+            continue
+
+        parent_model = fill_parent_lookup.get(index)
+        if parent_model is None:
+            raise ImportValidationError("Unable to determine parent trade for new fill")
+
+        fill = record.normalized
         asset = await get_asset(fill.asset_code, fill.asset_type, fill.timezone, fill.exchange)
         trade_fill = TradeFill(
-            parent_trade_id=parent_id_lookup.get(idx),
+            parent_trade_id=parent_model.id,
             asset_id=asset.id,
             side=fill.side,
             quantity=fill.quantity,
