@@ -32,30 +32,57 @@ const CalendarPage = () => {
   );
 
   useEffect(() => {
+    let cancelled = false;
+
     const load = async () => {
       setLoading(true);
       try {
-        const response = await fetchCalendar({
-          year: value.year(),
-          month: value.month() + 1,
-          timezone,
-          currency,
-          mode,
-          ...query
-        });
+        const months =
+          mode === "month"
+            ? [value.subtract(1, "month"), value, value.add(1, "month")]
+            : [value];
+
+        const responses = await Promise.all(
+          months.map((monthValue) =>
+            fetchCalendar({
+              year: monthValue.year(),
+              month: monthValue.month() + 1,
+              timezone,
+              currency,
+              mode,
+              ...query
+            })
+          )
+        );
+
+        if (cancelled) {
+          return;
+        }
+
         const bucket: Record<string, CalendarDay> = {};
-        response.forEach((item) => {
-          const key = mode === "year" ? dayjs(item.date).format("YYYY-MM") : item.date;
-          bucket[key] = item;
+        responses.forEach((items) => {
+          items.forEach((item) => {
+            const key = mode === "year" ? dayjs(item.date).format("YYYY-MM") : item.date;
+            bucket[key] = item;
+          });
         });
         setData(bucket);
       } catch (error) {
-        console.error("Failed to load calendar", error);
+        if (!cancelled) {
+          console.error("Failed to load calendar", error);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
+
     void load();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currency, mode, query, timezone, value]);
 
   const dateCellRender = (current: Dayjs) => {
