@@ -66,6 +66,7 @@ export interface ImportBatch {
   status: string;
   error_message?: string | null;
   total_records: number;
+  skipped_records: number;
   created_at: string;
   completed_at: string | null;
   timezone: string | null;

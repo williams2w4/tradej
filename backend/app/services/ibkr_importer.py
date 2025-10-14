@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -61,6 +61,12 @@ class ImportValidationError(Exception):
             super().__init__(f"Row {row_number}: {message}")
         else:
             super().__init__(message)
+
+
+class DuplicateTradeError(ImportValidationError):
+    def __init__(self, message: str, duplicate_count: int) -> None:
+        super().__init__(message)
+        self.duplicate_count = duplicate_count
 
 
 def _parse_ibkr_datetime(value: str, timezone: str) -> datetime:
@@ -136,53 +142,73 @@ def _normalize_row(row: dict[str, str], row_number: int) -> NormalizedFill:
 async def check_duplicate_trades(session: AsyncSession, fills: list[NormalizedFill]) -> set[int]:
     """
     检查填充列表中是否有重复的交易记录。
+    当交易时间一致且 TradeID 已存在时视为重复。
     返回重复记录在列表中的索引集合。
     """
     duplicate_indexes = set()
-    
-    # 收集所有非空的 source (TradeID) 和 order_id (OrderID)
-    sources = []
-    order_ids = []
-    
-    for i, fill in enumerate(fills):
+
+    # 收集所有非空的 source (TradeID)
+    sources: dict[str, list[int]] = {}
+
+    for index, fill in enumerate(fills):
         if fill.source:
-            sources.append((fill.source, i))
-        if fill.order_id:
-            order_ids.append((fill.order_id, i))
-    
+            sources.setdefault(fill.source, []).append(index)
+
     if sources:
-        # 查询数据库中已存在的 TradeID
-        source_values = [source for source, _ in sources]
+        source_values = list(sources.keys())
         existing_sources_result = await session.execute(
-            select(TradeFill.source).where(TradeFill.source.in_(source_values))
+            select(TradeFill.source, TradeFill.trade_time).where(TradeFill.source.in_(source_values))
         )
-        existing_sources = {row[0] for row in existing_sources_result.fetchall()}
-        
-        # 标记重复的记录索引
-        for source, index in sources:
-            if source in existing_sources:
-                duplicate_indexes.add(index)
-    
-    if order_ids:
-        # 查询数据库中已存在的 OrderID
-        order_id_values = [order_id for order_id, _ in order_ids]
-        existing_order_ids_result = await session.execute(
-            select(TradeFill.order_id).where(TradeFill.order_id.in_(order_id_values))
-        )
-        existing_order_ids = {row[0] for row in existing_order_ids_result.fetchall()}
-        
-        # 标记重复的记录索引
-        for order_id, index in order_ids:
-            if order_id in existing_order_ids:
-                duplicate_indexes.add(index)
-    
+        existing_sources: dict[str, set[datetime]] = {}
+        for existing_source, trade_time in existing_sources_result.all():
+            if existing_source is None or trade_time is None:
+                continue
+            existing_sources.setdefault(existing_source, set()).add(trade_time)
+
+        for source, indexes in sources.items():
+            known_times = existing_sources.get(source)
+            if not known_times:
+                continue
+            for index in indexes:
+                if fills[index].trade_time in known_times:
+                    duplicate_indexes.add(index)
+
     return duplicate_indexes
+
+
+async def remove_existing_duplicate_trades(session: AsyncSession, duplicate_fills: list[NormalizedFill]) -> None:
+    """
+    删除数据库中与传入成交记录相同（TradeID + 时间）的父交易。
+    """
+    keys = {(fill.source, fill.trade_time) for fill in duplicate_fills if fill.source}
+    if not keys:
+        return
+
+    key_values = list(keys)
+    stmt = select(TradeFill).where(
+        tuple_(TradeFill.source, TradeFill.trade_time).in_(key_values)
+    )
+    result = await session.execute(stmt)
+    existing_fills = result.scalars().all()
+    if not existing_fills:
+        return
+
+    parent_ids = {fill.parent_trade_id for fill in existing_fills if fill.parent_trade_id is not None}
+    if parent_ids:
+        parent_stmt = select(ParentTrade).where(ParentTrade.id.in_(parent_ids))
+        parents = (await session.execute(parent_stmt)).scalars().unique().all()
+        for parent in parents:
+            await session.delete(parent)
+    else:
+        for fill in existing_fills:
+            await session.delete(fill)
 
 
 async def import_ibkr_csv(
     session: AsyncSession,
     file_bytes: bytes,
     filename: str,
+    override_duplicates: bool = False,
 ) -> ImportBatch:
     csv_buffer = io.StringIO(file_bytes.decode("utf-8-sig"))
     reader = csv.DictReader(csv_buffer)
@@ -201,13 +227,18 @@ async def import_ibkr_csv(
 
     # 检查重复的交易记录
     duplicate_indexes = await check_duplicate_trades(session, fills)
-    
-    # 过滤掉重复的记录
-    unique_fills = [fill for i, fill in enumerate(fills) if i not in duplicate_indexes]
-    skipped_count = len(duplicate_indexes)
-    
-    if not unique_fills:
-        raise ImportValidationError("All trade records are duplicates - no new records to import")
+
+    if duplicate_indexes and override_duplicates:
+        await remove_existing_duplicate_trades(session, [fills[i] for i in duplicate_indexes])
+        unique_fills = fills
+        skipped_count = 0
+    else:
+        # 过滤掉重复的记录
+        unique_fills = [fill for i, fill in enumerate(fills) if i not in duplicate_indexes]
+        skipped_count = len(duplicate_indexes)
+
+        if not unique_fills:
+            raise DuplicateTradeError("All trade records are duplicates - no new records to import", skipped_count)
 
     # 将数据库中未平仓的成交与新成交合并，确保聚合能够跨批次完成匹配
     combined_records: list[_CombinedFill] = []
