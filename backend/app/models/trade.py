@@ -57,6 +57,7 @@ class TradeFill(Base):
     source: Mapped[str | None] = mapped_column(String(50))
     order_id: Mapped[str | None] = mapped_column(String(100))
     import_batch_id: Mapped[int] = mapped_column(ForeignKey("import_batches.id"))
+    net_cash: Mapped[float | None] = mapped_column(Numeric(20, 8), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
     parent_trade: Mapped[ParentTrade | None] = relationship(back_populates="fills")

@@ -24,6 +24,7 @@ class NormalizedFill:
     proceeds: float | None = None  # Absolute transaction amount (excluding commission)
     order_id: str | None = None
     source: str | None = None
+    net_cash: float | None = None
 
 
 @dataclass
@@ -40,6 +41,18 @@ class AggregatedTrade:
     profit_loss: float
     currency: str
     fill_indexes: list[int] = field(default_factory=list)
+
+
+def resolve_net_cash(fill: NormalizedFill) -> float:
+    """
+    Return the per-fill net cash amount. Falls back to calculating from price/quantity
+    if explicit NetCash is not available.
+    """
+    if fill.net_cash is not None:
+        return float(fill.net_cash)
+    transaction_amount = float(fill.price) * float(fill.quantity) * float(fill.multiplier)
+    signed_amount = transaction_amount if fill.side == FillSide.SELL else -transaction_amount
+    return signed_amount - float(fill.commission)
 
 
 def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[AggregatedTrade], dict[int, int]]:
@@ -67,7 +80,7 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
                 "close_sum_qty": 0.0,
                 "close_sum_amount": 0.0,
                 "total_commission": 0.0,
-                "cash_flow": 0.0,
+                "net_cash_total": 0.0,
                 "max_abs_position": 0.0,
                 "currency": fill.currency,
                 "multiplier": fill.multiplier,  # Store multiplier from the fill
@@ -116,10 +129,7 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
             state["close_sum_qty"] += close_qty
             state["close_sum_amount"] += close_qty * unit_amount
 
-        if signed_qty > 0:
-            state["cash_flow"] -= transaction_amount
-        else:
-            state["cash_flow"] += transaction_amount
+        state["net_cash_total"] += resolve_net_cash(fill)
 
         state["total_commission"] += float(fill.commission)
         state["position"] = position_after
@@ -148,7 +158,7 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
                     open_price=open_price,
                     close_price=close_price,
                     total_commission=float(state["total_commission"]),
-                    profit_loss=float(state["cash_flow"]) - float(state["total_commission"]),
+                    profit_loss=float(state["net_cash_total"]),
                     currency=state["currency"],
                     fill_indexes=list(state["fills"]),
                 )
@@ -183,7 +193,7 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
                 open_price=open_price,
                 close_price=close_price,
                 total_commission=float(state["total_commission"]),
-                profit_loss=float(state["cash_flow"]) - float(state["total_commission"]),
+                profit_loss=float(state["net_cash_total"]),
                 currency=state["currency"],
                 fill_indexes=list(state["fills"]),
             )

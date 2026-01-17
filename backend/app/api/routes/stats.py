@@ -39,7 +39,7 @@ def _load_trades(
         select(ParentTrade)
         .join(Asset)
         .options(selectinload(ParentTrade.asset))
-        .order_by(ParentTrade.open_time.desc())
+        .order_by(ParentTrade.close_time.desc())
     )
     conditions = []
     # Only include trades that have been closed (close_time is not None)
@@ -51,9 +51,9 @@ def _load_trades(
     if direction:
         conditions.append(ParentTrade.direction == direction)
     if start_utc:
-        conditions.append(ParentTrade.open_time >= start_utc)
+        conditions.append(ParentTrade.close_time >= start_utc)
     if end_utc:
-        conditions.append(ParentTrade.open_time <= end_utc)
+        conditions.append(ParentTrade.close_time <= end_utc)
     if conditions:
         stmt = stmt.where(and_(*conditions))
     return stmt

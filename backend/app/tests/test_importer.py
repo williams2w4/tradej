@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timezone
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select
@@ -36,6 +37,26 @@ async def test_import_ibkr_csv(async_session, mock_csv_bytes) -> None:
         assert fill.parent_trade_id is not None
         parent_fill_counts[fill.parent_trade_id] += 1
     assert all(count > 0 for count in parent_fill_counts.values())
+
+    tz = ZoneInfo("America/New_York")
+    daily_profit: dict[str, float] = {}
+    for trade in trades:
+        if trade.close_time is None:
+            continue
+        close_date = trade.close_time.astimezone(tz).date().isoformat()
+        daily_profit[close_date] = daily_profit.get(close_date, 0.0) + float(trade.profit_loss)
+
+    expected_daily = {
+        "2026-01-09": -77.38,
+        "2026-01-12": 2.3,
+        "2026-01-14": 662.25,
+        "2026-01-15": 957.35,
+        "2026-01-16": 28.57,
+        "2026-01-17": 750.0,
+    }
+    for day, expected_value in expected_daily.items():
+        assert day in daily_profit
+        assert abs(daily_profit[day] - expected_value) <= 1.0
 
 
 @pytest.mark.asyncio

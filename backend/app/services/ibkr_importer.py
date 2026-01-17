@@ -20,7 +20,7 @@ from app.models import (
     TradeFill,
 )
 from app.models.trade import FillSide
-from app.services.aggregation import NormalizedFill, aggregate_parent_trades
+from app.services.aggregation import NormalizedFill, aggregate_parent_trades, resolve_net_cash
 
 
 @dataclass
@@ -52,6 +52,7 @@ REQUIRED_COLUMNS = {
     "Price",
     "Commission",
     "CurrencyPrimary",
+    "NetCash",
 }
 
 
@@ -180,6 +181,11 @@ def _normalize_row(row: dict[str, str], row_number: int) -> NormalizedFill:
         except (ValueError, TypeError):
             pass
 
+    try:
+        net_cash = float(row["NetCash"])
+    except (ValueError, TypeError) as exc:
+        raise ImportValidationError("NetCash must be a number", row_number) from exc
+
     exchange_field = row.get("ListingExchange", "")
     exchange = exchange_field.split(",")[0].split(";")[0].strip().upper() or None
     timezone = EXCHANGE_TIMEZONES.get(exchange, "America/New_York")
@@ -198,6 +204,7 @@ def _normalize_row(row: dict[str, str], row_number: int) -> NormalizedFill:
         currency=currency,
         multiplier=multiplier,
         proceeds=proceeds,
+        net_cash=net_cash,
         order_id=row.get("OrderID", "").strip() or None,
         source=row.get("TradeID", "").strip() or None,
     )
@@ -355,6 +362,7 @@ async def import_ibkr_csv(
                     multiplier=multiplier,
                     order_id=existing_fill.order_id,
                     source=existing_fill.source,
+                    net_cash=float(existing_fill.net_cash) if existing_fill.net_cash is not None else None,
                 )
                 combined_records.append(
                     _CombinedFill(normalized=normalized_existing, kind="existing", existing_fill=existing_fill)
@@ -481,6 +489,7 @@ async def import_ibkr_csv(
             source=fill.source,
             order_id=fill.order_id,
             import_batch_id=batch.id,
+            net_cash=resolve_net_cash(fill),
         )
         session.add(trade_fill)
 

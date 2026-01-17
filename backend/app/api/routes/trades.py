@@ -92,7 +92,10 @@ async def list_trades(
         select(ParentTrade)
         .join(Asset)
         .options(selectinload(ParentTrade.asset), selectinload(ParentTrade.fills))
-        .order_by(ParentTrade.open_time.desc())
+        .order_by(
+            ParentTrade.close_time.desc().nulls_last(),
+            ParentTrade.open_time.desc(),
+        )
     )
 
     conditions = []
@@ -103,9 +106,11 @@ async def list_trades(
     if direction:
         conditions.append(ParentTrade.direction == direction)
     if start_utc:
-        conditions.append(ParentTrade.open_time >= start_utc)
+        conditions.append(ParentTrade.close_time >= start_utc)
     if end_utc:
-        conditions.append(ParentTrade.open_time <= end_utc)
+        conditions.append(ParentTrade.close_time <= end_utc)
+    if start_utc or end_utc:
+        conditions.append(ParentTrade.close_time.is_not(None))
 
     if conditions:
         stmt = stmt.where(and_(*conditions))
