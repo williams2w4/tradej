@@ -20,6 +20,8 @@ class NormalizedFill:
     price: float
     commission: float
     currency: str
+    multiplier: float = 1.0  # Contract multiplier, defaults to 1.0 for stocks
+    proceeds: float | None = None  # Absolute transaction amount (excluding commission)
     order_id: str | None = None
     source: str | None = None
 
@@ -68,6 +70,7 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
                 "cash_flow": 0.0,
                 "max_abs_position": 0.0,
                 "currency": fill.currency,
+                "multiplier": fill.multiplier,  # Store multiplier from the fill
             }
             state_by_asset[fill.asset_code] = state
 
@@ -90,18 +93,33 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
             close_qty = abs_before
             open_qty = abs_after
 
+        # Calculate transaction amount (absolute value)
+        # Use proceeds if available, otherwise calculate from price * quantity * multiplier
+        if fill.proceeds is not None:
+            transaction_amount = abs(fill.proceeds)
+            # If using proceeds, we need to derive the effective unit price for average price calculations
+            # effective_unit_price = transaction_amount / (fill.quantity * fill.multiplier)
+            # But here we just need the total amount for the portion of quantity
+            
+            # Pro-rate amount based on quantity if needed (though usually fill is processed as a whole)
+            # In this loop, we process one fill at a time, so transaction_amount corresponds to fill.quantity
+            unit_amount = transaction_amount / fill.quantity if fill.quantity > 0 else 0
+        else:
+            transaction_amount = float(fill.price) * float(fill.quantity) * float(fill.multiplier)
+            unit_amount = float(fill.price) * float(fill.multiplier)
+
         if open_qty > 0:
             state["open_sum_qty"] += open_qty
-            state["open_sum_amount"] += open_qty * float(fill.price)
+            state["open_sum_amount"] += open_qty * unit_amount
 
         if close_qty > 0:
             state["close_sum_qty"] += close_qty
-            state["close_sum_amount"] += close_qty * float(fill.price)
+            state["close_sum_amount"] += close_qty * unit_amount
 
         if signed_qty > 0:
-            state["cash_flow"] -= float(fill.price) * float(fill.quantity)
+            state["cash_flow"] -= transaction_amount
         else:
-            state["cash_flow"] += float(fill.price) * float(fill.quantity)
+            state["cash_flow"] += transaction_amount
 
         state["total_commission"] += float(fill.commission)
         state["position"] = position_after
@@ -109,12 +127,12 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
 
         if position_after == 0:
             open_price = (
-                float(state["open_sum_amount"]) / float(state["open_sum_qty"])
+                float(state["open_sum_amount"]) / (float(state["open_sum_qty"]) * float(fill.multiplier))
                 if state["open_sum_qty"] > 0
                 else None
             )
             close_price = (
-                float(state["close_sum_amount"]) / float(state["close_sum_qty"])
+                float(state["close_sum_amount"]) / (float(state["close_sum_qty"]) * float(fill.multiplier))
                 if state["close_sum_qty"] > 0
                 else None
             )
@@ -142,13 +160,14 @@ def aggregate_parent_trades(fills: Iterable[NormalizedFill]) -> tuple[list[Aggre
             state_by_asset[fill.asset_code] = state
 
     for state in state_by_asset.values():
+        multiplier = float(state["multiplier"])
         open_price = (
-            float(state["open_sum_amount"]) / float(state["open_sum_qty"])
+            float(state["open_sum_amount"]) / (float(state["open_sum_qty"]) * multiplier)
             if state["open_sum_qty"] > 0
             else None
         )
         close_price = (
-            float(state["close_sum_amount"]) / float(state["close_sum_qty"])
+            float(state["close_sum_amount"]) / (float(state["close_sum_qty"]) * multiplier)
             if state["close_sum_qty"] > 0
             else None
         )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -24,6 +25,21 @@ async def create_import(
 ) -> ImportBatch:
     if broker.lower() != "ibkr":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported broker")
+    
+    # Validate file format
+    if file.filename:
+        file_ext = os.path.splitext(file.filename.lower())[1]
+        if file_ext in ['.numbers', '.xlsx', '.xls']:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Unsupported file format '{file_ext}'. Please export your data as a CSV file and try again."
+            )
+        elif file_ext and file_ext != '.csv':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail=f"Unsupported file format '{file_ext}'. Only CSV files are supported."
+            )
+    
     contents = await file.read()
     if not contents:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file uploaded")

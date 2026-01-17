@@ -69,6 +69,44 @@ class DuplicateTradeError(ImportValidationError):
         self.duplicate_count = duplicate_count
 
 
+def _infer_multiplier(symbol: str, asset_type: AssetType) -> float:
+    """Infer contract multiplier based on symbol and asset type."""
+    if asset_type != AssetType.FUTURE:
+        return 1.0
+    
+    # Common futures multipliers
+    if symbol.startswith("ES"):
+        return 50.0  # E-mini S&P 500
+    elif symbol.startswith("MES"):
+        return 5.0   # Micro E-mini S&P 500
+    elif symbol.startswith("NQ"):
+        return 20.0  # E-mini NASDAQ-100
+    elif symbol.startswith("MNQ"):
+        return 2.0   # Micro E-mini NASDAQ-100
+    elif symbol.startswith("YM"):
+        return 5.0   # E-mini Dow Jones
+    elif symbol.startswith("MYM"):
+        return 0.5   # Micro E-mini Dow Jones
+    elif symbol.startswith("RTY"):
+        return 50.0  # E-mini Russell 2000
+    elif symbol.startswith("M2K"):
+        return 5.0   # Micro E-mini Russell 2000
+    elif symbol.startswith("GC"):
+        return 100.0 # Gold futures
+    elif symbol.startswith("MGC"):
+        return 10.0  # Micro Gold futures
+    elif symbol.startswith("SI"):
+        return 5000.0 # Silver futures
+    elif symbol.startswith("SIL"):
+        return 1000.0 # Micro Silver futures
+    elif symbol.startswith("CL"):
+        return 1000.0 # Crude Oil futures
+    elif symbol.startswith("MCL"):
+        return 100.0  # Micro Crude Oil futures
+    else:
+        return 1.0   # Default multiplier for unknown futures
+
+
 def _parse_ibkr_datetime(value: str, timezone: str) -> datetime:
     try:
         date_part, time_part = value.split(";")
@@ -118,6 +156,30 @@ def _normalize_row(row: dict[str, str], row_number: int) -> NormalizedFill:
     if not currency:
         raise ImportValidationError("Currency is required", row_number)
 
+    # Handle contract multiplier for futures
+    try:
+        multiplier = float(row.get("Multiplier", "0"))
+    except (ValueError, TypeError):
+        multiplier = 0.0
+    
+    # If multiplier is missing or invalid, infer it from symbol
+    if multiplier <= 0 and asset_type == AssetType.FUTURE:
+        multiplier = _infer_multiplier(symbol, asset_type)
+    
+    # Default to 1.0 if still invalid (e.g. not a future or inference failed)
+    if multiplier <= 0:
+        multiplier = 1.0
+
+    # Handle Proceeds if available (IBKR usually provides this)
+    # Proceeds is the net cash flow (excluding commission usually, but check broker spec)
+    # We store the absolute value of the transaction amount
+    proceeds = None
+    if "Proceeds" in row and row["Proceeds"]:
+        try:
+            proceeds = abs(float(row["Proceeds"]))
+        except (ValueError, TypeError):
+            pass
+
     exchange_field = row.get("ListingExchange", "")
     exchange = exchange_field.split(",")[0].split(";")[0].strip().upper() or None
     timezone = EXCHANGE_TIMEZONES.get(exchange, "America/New_York")
@@ -134,6 +196,8 @@ def _normalize_row(row: dict[str, str], row_number: int) -> NormalizedFill:
         price=price,
         commission=commission,
         currency=currency,
+        multiplier=multiplier,
+        proceeds=proceeds,
         order_id=row.get("OrderID", "").strip() or None,
         source=row.get("TradeID", "").strip() or None,
     )
@@ -210,7 +274,21 @@ async def import_ibkr_csv(
     filename: str,
     override_duplicates: bool = False,
 ) -> ImportBatch:
-    csv_buffer = io.StringIO(file_bytes.decode("utf-8-sig"))
+    try:
+        csv_buffer = io.StringIO(file_bytes.decode("utf-8-sig"))
+    except UnicodeDecodeError as e:
+        # Check if this might be a binary file based on the filename
+        if filename and any(filename.lower().endswith(ext) for ext in ['.numbers', '.xlsx', '.xls']):
+            raise ImportValidationError(
+                f"Cannot import '{filename}' as it appears to be a binary file format. "
+                "Please export your data as a CSV file and try again."
+            ) from e
+        else:
+            raise ImportValidationError(
+                f"Unable to read file '{filename}' - it may not be a valid CSV file or may have encoding issues. "
+                "Please ensure the file is saved as UTF-8 encoded CSV."
+            ) from e
+    
     reader = csv.DictReader(csv_buffer)
     if not reader.fieldnames:
         raise ImportValidationError("CSV header is missing")
@@ -260,6 +338,9 @@ async def import_ibkr_csv(
             parent_exchange = parent.asset.exchange
             sorted_fills = sorted(parent.fills, key=lambda fill: fill.trade_time)
             for existing_fill in sorted_fills:
+                # Infer multiplier for existing fills based on symbol and asset type
+                multiplier = _infer_multiplier(parent.asset.code, parent.asset.asset_type)
+                
                 normalized_existing = NormalizedFill(
                     asset_code=parent.asset.code,
                     asset_type=parent.asset.asset_type,
@@ -271,6 +352,7 @@ async def import_ibkr_csv(
                     price=float(existing_fill.price),
                     commission=float(existing_fill.commission),
                     currency=existing_fill.currency,
+                    multiplier=multiplier,
                     order_id=existing_fill.order_id,
                     source=existing_fill.source,
                 )

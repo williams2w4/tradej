@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import ImportBatch, ParentTrade, TradeFill
-from app.services.ibkr_importer import import_ibkr_csv
+from app.services.ibkr_importer import ImportValidationError, import_ibkr_csv
 
 
 @pytest.mark.asyncio
@@ -36,3 +36,31 @@ async def test_import_ibkr_csv(async_session, mock_csv_bytes) -> None:
         assert fill.parent_trade_id is not None
         parent_fill_counts[fill.parent_trade_id] += 1
     assert all(count > 0 for count in parent_fill_counts.values())
+
+
+@pytest.mark.asyncio
+async def test_import_binary_file_rejection(async_session) -> None:
+    """Test that binary files like .numbers are properly rejected with helpful error messages."""
+    # Simulate binary data that would cause UnicodeDecodeError
+    binary_data = b'\x93\x94\x95\x96\x97\x98\x99\x9a'  # Invalid UTF-8 bytes
+    
+    with pytest.raises(ImportValidationError) as exc_info:
+        await import_ibkr_csv(async_session, binary_data, "TradeNote.numbers")
+    
+    error_message = str(exc_info.value)
+    assert "binary file format" in error_message
+    assert "export your data as a CSV" in error_message
+
+
+@pytest.mark.asyncio
+async def test_import_invalid_encoding_rejection(async_session) -> None:
+    """Test that files with encoding issues are properly rejected."""
+    # Simulate data with encoding issues
+    invalid_data = b'\x93\x94\x95\x96\x97\x98\x99\x9a'  # Invalid UTF-8 bytes
+    
+    with pytest.raises(ImportValidationError) as exc_info:
+        await import_ibkr_csv(async_session, invalid_data, "TradeNote.csv")
+    
+    error_message = str(exc_info.value)
+    assert "encoding issues" in error_message
+    assert "UTF-8 encoded CSV" in error_message
