@@ -1,24 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum as PyEnum
-
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.asset import Asset
 from app.models.import_batch import ImportBatch
-
-
-class TradeDirection(str, PyEnum):
-    LONG = "long"
-    SHORT = "short"
-
-
-class FillSide(str, PyEnum):
-    BUY = "BUY"
-    SELL = "SELL"
+from app.models.enums import AssetType, FillSide, TradeDirection
 
 
 class ParentTrade(Base):

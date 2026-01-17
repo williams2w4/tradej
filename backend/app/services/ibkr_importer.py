@@ -13,13 +13,12 @@ from sqlalchemy.orm import selectinload
 
 from app.models import (
     Asset,
-    AssetType,
     ImportBatch,
     ImportStatus,
     ParentTrade,
     TradeFill,
 )
-from app.models.trade import FillSide
+from app.models.enums import AssetType, FillSide
 from app.services.aggregation import NormalizedFill, aggregate_parent_trades, resolve_net_cash
 
 
@@ -29,14 +28,7 @@ class _CombinedFill:
     kind: Literal["existing", "new"]
     existing_fill: TradeFill | None = None
 
-EXCHANGE_TIMEZONES = {
-    "ARCA": "America/New_York",
-    "NYSE": "America/New_York",
-    "NASDAQ": "America/New_York",
-    "CBOE": "America/Chicago",
-    "CME": "America/Chicago",
-    "SMART": "America/New_York",
-}
+BROKER_TIMEZONE = "America/New_York"
 
 ASSET_TYPE_MAP = {
     "STK": AssetType.STOCK,
@@ -188,7 +180,7 @@ def _normalize_row(row: dict[str, str], row_number: int) -> NormalizedFill:
 
     exchange_field = row.get("ListingExchange", "")
     exchange = exchange_field.split(",")[0].split(";")[0].strip().upper() or None
-    timezone = EXCHANGE_TIMEZONES.get(exchange, "America/New_York")
+    timezone = BROKER_TIMEZONE
     trade_time = _parse_ibkr_datetime(row["Date/Time"], timezone)
 
     return NormalizedFill(

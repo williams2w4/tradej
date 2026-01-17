@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum as PyEnum
-
 from sqlalchemy import DateTime, Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-
-
-class AssetType(str, PyEnum):
-    STOCK = "stock"
-    OPTION = "option"
-    FUTURE = "future"
+from app.models.enums import AssetType
 
 
 class Asset(Base):

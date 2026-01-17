@@ -11,8 +11,8 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db
 from app.core.currency import normalize_currency
-from app.models import Asset, AssetType, ParentTrade, TradeFill
-from app.models.trade import FillSide, TradeDirection
+from app.models import Asset, ParentTrade, TradeFill
+from app.models.enums import AssetType, FillSide, TradeDirection
 from app.schemas.trade import ParentTradeWithFills, TradeFillBase
 
 router = APIRouter(prefix="/api/trades", tags=["trades"])

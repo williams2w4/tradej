@@ -12,8 +12,8 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_db
 from app.core.currency import convert_amount, normalize_currency
-from app.models import Asset, AssetType, ParentTrade
-from app.models.trade import TradeDirection
+from app.models import Asset, ParentTrade
+from app.models.enums import AssetType, TradeDirection
 from app.schemas.stats import AssetBreakdown, OverviewStats
 
 router = APIRouter(prefix="/api/stats", tags=["stats"])

@@ -5,8 +5,7 @@ from typing import Sequence
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.asset import AssetType
-from app.models.trade import FillSide, TradeDirection
+from app.models.enums import AssetType, FillSide, TradeDirection
 
 
 class TradeFillBase(BaseModel):

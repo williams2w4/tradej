@@ -4,8 +4,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Iterable
 
-from app.models.asset import AssetType
-from app.models.trade import FillSide, TradeDirection
+from app.models.enums import AssetType, FillSide, TradeDirection
 
 
 @dataclass
